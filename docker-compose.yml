@@ -3,16 +3,18 @@
 #
 # SPDX-License-Identifier: MIT
 
-name: cvat
+name: borovets_cvat
 
 x-backend-env: &backend-env
+  CVAT_HEALTH_DISK_USAGE_MAX: 99
+  CVAT_HOST: ${CVAT_HOST:-localhost}
   CVAT_POSTGRES_HOST: cvat_db
   CVAT_REDIS_INMEM_HOST: cvat_redis_inmem
   CVAT_REDIS_INMEM_PORT: 6379
   CVAT_REDIS_ONDISK_HOST: cvat_redis_ondisk
   CVAT_REDIS_ONDISK_PORT: 6666
   CVAT_LOG_IMPORT_ERRORS: 'true'
-  CVAT_ALLOW_STATIC_CACHE: '${CVAT_ALLOW_STATIC_CACHE:-no}'
+  CVAT_ALLOW_STATIC_CACHE: '${CVAT_ALLOW_STATIC_CACHE:-yes}'
   DJANGO_LOG_SERVER_HOST: vector
   DJANGO_LOG_SERVER_PORT: 8282
   no_proxy: clickhouse,grafana,vector,nuclio,opa,${no_proxy:-}
@@ -37,7 +39,7 @@ x-clickhouse-env: &clickhouse-env
 
 services:
   cvat_db:
-    container_name: cvat_db
+    container_name: borovets_cvat_db
     image: postgres:15-alpine
     restart: always
     environment:
@@ -50,7 +52,7 @@ services:
       - cvat
 
   cvat_redis_inmem:
-    container_name: cvat_redis_inmem
+    container_name: borovets_cvat_redis_inmem
     image: redis:7.2.11-alpine
     restart: always
     command: [
@@ -64,7 +66,7 @@ services:
       - cvat
 
   cvat_redis_ondisk:
-    container_name: cvat_redis_ondisk
+    container_name: borovets_cvat_redis_ondisk
     image: apache/kvrocks:2.12.1
     restart: always
     # The kvrocks image a) has a healthcheck command, and b) has a root process
@@ -82,9 +84,16 @@ services:
       ]
 
   cvat_server:
-    container_name: cvat_server
+    container_name: borovets_cvat_server
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
     depends_on:
       <<: *backend-deps
       cvat_opa:
@@ -97,7 +106,10 @@ services:
       ADAPTIVE_AUTO_ANNOTATION: 'false'
       NUMPROCS: 2
       CVAT_ANALYTICS: 1
-      CVAT_BASE_URL:
+      CVAT_BASE_URL: "https://${CVAT_HOST:-localhost}"
+      CSRF_TRUSTED_ORIGINS: "https://${CVAT_HOST:-localhost}"
+      SECURE_PROXY_SSL_HEADER: "HTTP_X_FORWARDED_PROTO,https"
+      USE_X_FORWARDED_HOST: "true"
       ONE_RUNNING_JOB_IN_QUEUE_PER_USER:
     command: init run server
     labels:
@@ -118,7 +130,7 @@ services:
           - cvat-server
 
   cvat_worker_utils:
-    container_name: cvat_worker_utils
+    container_name: borovets_cvat_worker_utils
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -135,7 +147,7 @@ services:
       - cvat
 
   cvat_worker_import:
-    container_name: cvat_worker_import
+    container_name: borovets_cvat_worker_import
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -151,7 +163,7 @@ services:
       - cvat
 
   cvat_worker_export:
-    container_name: cvat_worker_export
+    container_name: borovets_cvat_worker_export
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -167,9 +179,16 @@ services:
       - cvat
 
   cvat_worker_annotation:
-    container_name: cvat_worker_annotation
+    container_name: borovets_cvat_worker_annotation
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
     depends_on: *backend-deps
     environment:
       <<: *backend-env
@@ -183,7 +202,7 @@ services:
       - cvat
 
   cvat_worker_webhooks:
-    container_name: cvat_worker_webhooks
+    container_name: borovets_cvat_worker_webhooks
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -199,7 +218,7 @@ services:
       - cvat
 
   cvat_worker_quality_reports:
-    container_name: cvat_worker_quality_reports
+    container_name: borovets_cvat_worker_quality_reports
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -215,7 +234,7 @@ services:
       - cvat
 
   cvat_worker_chunks:
-    container_name: cvat_worker_chunks
+    container_name: borovets_cvat_worker_chunks
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -231,7 +250,7 @@ services:
       - cvat
 
   cvat_worker_consensus:
-    container_name: cvat_worker_consensus
+    container_name: borovets_cvat_worker_consensus
     image: cvat/server:${CVAT_VERSION:-dev}
     restart: always
     depends_on: *backend-deps
@@ -247,7 +266,7 @@ services:
       - cvat
 
   cvat_ui:
-    container_name: cvat_ui
+    container_name: borovets_cvat_ui
     image: cvat/ui:${CVAT_VERSION:-dev}
     restart: always
     depends_on:
@@ -262,7 +281,7 @@ services:
 
   traefik:
     image: traefik:v3.6
-    container_name: traefik
+    container_name: borovets_traefik
     restart: always
     ports:
       - 8080:8080
@@ -311,7 +330,7 @@ services:
         max-file: "10"
 
   cvat_opa:
-    container_name: cvat_opa
+    container_name: borovets_cvat_opa
     image: openpolicyagent/opa:1.12.2
     restart: always
     networks:
@@ -330,7 +349,7 @@ services:
       - --set=bundles.cvat.polling.max_delay_seconds=15
 
   cvat_clickhouse:
-    container_name: cvat_clickhouse
+    container_name: borovets_cvat_clickhouse
     image: clickhouse/clickhouse-server:23.11-alpine
     restart: "always"
     environment:
@@ -343,7 +362,7 @@ services:
       - cvat_events_db:/var/lib/clickhouse/
 
   cvat_vector:
-    container_name: cvat_vector
+    container_name: borovets_cvat_vector
     image: timberio/vector:0.26.0-alpine
     user: "1000:1000" # Workaround for <https://github.com/vectordotdev/vector/issues/1599>.
     restart: always
@@ -366,7 +385,7 @@ services:
   cvat_grafana:
     image: grafana/grafana-oss:10.1.2
     restart: always
-    container_name: cvat_grafana
+    container_name: borovets_cvat_grafana
     environment:
       <<: *clickhouse-env
       GF_PATHS_PROVISIONING: /etc/grafana/provisioning

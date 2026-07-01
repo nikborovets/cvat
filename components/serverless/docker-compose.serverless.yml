@@ -1,6 +1,6 @@
 services:
   nuclio:
-    container_name: nuclio
+    container_name: borovets_nuclio
     image: quay.io/nuclio/dashboard:1.15.9-amd64
     restart: always
     networks:
@@ -13,6 +13,7 @@ services:
       no_proxy: ${no_proxy:-}
       NUCLIO_CHECK_FUNCTION_CONTAINERS_HEALTHINESS: 'true'
       NUCLIO_DASHBOARD_DEFAULT_FUNCTION_MOUNT_MODE: 'volume'
+      NUCLIO_DASHBOARD_DEFAULT_NETWORK: borovets_cvat_cvat
     ports:
       - '8070:8070'
     logging:
