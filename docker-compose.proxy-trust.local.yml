@@ -1,0 +1,8 @@
+services:
+  traefik:
+    environment:
+      # Comma-separated list of trusted proxy IPs/CIDRs that are allowed
+      # to provide X-Forwarded-* headers.
+      TRAEFIK_ENTRYPOINTS_web_FORWARDEDHEADERS_TRUSTEDIPS: ${TRAEFIK_TRUSTED_PROXY_IPS:-127.0.0.1/32,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      # Define websecure entrypoint to silence grafana_https router warnings.
+      TRAEFIK_ENTRYPOINTS_websecure_ADDRESS: :8443
